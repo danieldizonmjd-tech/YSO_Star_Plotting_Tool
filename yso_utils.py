@@ -41,15 +41,25 @@ def parse_mrt_file(filepath: str) -> pd.DataFrame:
     
     return pd.DataFrame(data)
 
-def compute_correlation_matrix(df: pd.DataFrame, columns: List[str] = None) -> pd.DataFrame:
+def compute_correlation_matrix(df: pd.DataFrame, columns: List[str] = None, standardize: bool = True) -> pd.DataFrame:
     """
     Compute Pearson correlation matrix for specified columns.
     Handles NaN values by dropping rows with missing data.
+    
+    Args:
+        df: DataFrame with data
+        columns: Columns to correlate. If None, uses all numeric columns
+        standardize: If True, standardize (z-score) columns before correlation to prevent
+                   variables with large scales from dominating
     """
     if columns is None:
         columns = df.select_dtypes(include=[np.number]).columns.tolist()
     
     subset = df[columns].dropna()
+    
+    if standardize:
+        subset = (subset - subset.mean()) / subset.std()
+    
     return subset.corr()
 
 def categorize_variability(df: pd.DataFrame, col: str = 'delW2mag') -> pd.Series:
@@ -75,16 +85,30 @@ def create_contingency_table(df: pd.DataFrame, col1: str, col2: str) -> pd.DataF
     """
     return pd.crosstab(df[col1], df[col2])
 
-def normalize_for_chord(matrix: pd.DataFrame) -> np.ndarray:
+def normalize_for_chord(matrix: pd.DataFrame, preserve_magnitude: bool = True) -> np.ndarray:
     """
     Normalize contingency/correlation matrix for chord diagram visualization.
     Converts to symmetric matrix compatible with Cachai chord diagrams.
+    
+    Args:
+        matrix: Contingency or correlation matrix
+        preserve_magnitude: If True, normalizes by global max to preserve relative magnitudes.
+                           If False, normalizes by row/column to show proportions.
     """
     n1, n2 = matrix.shape
     matrix_size = n1 + n2
     normalized = np.zeros((matrix_size, matrix_size))
     
-    matrix_norm = matrix.astype(float) / matrix.max().max()
+    matrix_float = matrix.astype(float)
+    
+    if preserve_magnitude:
+        max_val = matrix_float.max().max()
+        if max_val > 0:
+            matrix_norm = matrix_float / max_val
+        else:
+            matrix_norm = matrix_float
+    else:
+        matrix_norm = matrix_float
     
     for i in range(n1):
         for j in range(n2):
